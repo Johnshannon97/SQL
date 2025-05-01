@@ -1,0 +1,115 @@
+select FirstName, LastName, CustomerId, Country
+from chinook.customers
+where country !=  "USA"
+;
+
+select * from chinook.customers
+where Country ="Brazil"
+;
+
+select cust.FirstName, cust.LastName, inv.InvoiceId, inv.BillingCountry, inv.InvoiceDate
+from chinook.invoices as inv
+left join chinook.customers as cust
+on inv.CustomerId = cust.CustomerId
+where inv.BillingCountry = "Brazil"
+;
+
+select *
+from chinook.employees
+where title ="Sales Support Agent"
+;
+
+select distinct BillingCountry
+from chinook.invoices
+;
+
+select emp.LastName, emp.FirstName, inv.InvoiceId
+from chinook.employees emp
+join chinook.customers cust 
+on cust.SupportRepId = emp.EmployeeId
+join chinook.Invoices Inv 
+on Inv.CustomerId = cust.CustomerId
+;
+
+select emp.LastName, emp.FirstName, cust.LastName, cust.Country, inv.Total
+from chinook.employees emp
+join chinook.Customers cust
+on cust.SupportRepId= emp.EmployeeId
+join chinook.Invoices Inv
+on Inv.CustomerId = cust.CustomerId
+;
+
+select count(*)
+from chinook.invoices
+where InvoiceDate Between '2009-01-01' and '2009-12-31'
+;
+
+select sum(total)
+from chinook.Invoices
+where InvoiceDate Between '2009-0101' and '2009-12-31'
+;
+
+select t.Name, i.InvoiceLineId
+from chinook.Invoice_items i
+join chinook.Tracks t 
+on i.TrackId = t.TrackId;
+;
+
+select ar.name as Artist, t.Name as Track, i.InvoiceLineId
+from chinook.Invoice_items i
+left join chinook.tracks t
+on i.trackID=t. TrackID
+inner join chinook.albums a
+on a.AlbumID=t.AlbumID
+left join chinook.artists ar
+on ar.ArtistID=a.ArtistID
+;
+
+select t.Name AS 'Track Name', a.Title AS 'Album Title', m.Name AS 'Media Type', g.Name AS 'Genre'
+from chinook.tracks t
+join chinook.Albums a 
+on a.AlbumId = t.AlbumId
+join chinook.Media_Types m
+on m.MediaTypeId = t.MediaTypeId
+join chinook.Genres g
+on g.GenreId = t.GenreId
+;
+
+select emp.FirstName, emp.LastName,
+ROUND(SUM(Inv.Total), 2) as 'Total Sales' 
+from chinook.Employees emp
+join  chinook.Customers cust 
+on cust.SupportRepId = emp.EmployeeId
+join chinook.Invoices Inv 
+on Inv.CustomerId = cust.CustomerId
+where emp.Title = 'Sales Support Agent' 
+group by emp.FirstName
+;
+
+select cust.CustomerId, cust.FirstName || ' ' || cust.LastName as FullName, sum(inv.Total) as TotalSpent
+from chinook.customers cust
+join chinook.invoices inv
+on cust.CustomerId=inv.CustomerId
+group by cust.CustomerId
+order by TotalSpent desc
+Limit 5
+;
+
+select g.Name as Genre, count(t.trackId) as TrackCount
+from chinook.genres g
+join chinook.tracks t 
+on g.GenreId=t.GenreId
+group by g.GenreId
+order by TrackCount desc
+;
+
+select a.Title as AlbumTitale, Count(t.TrackId) as NumberOfTracks
+from chinook.albums a
+join chinook.tracks t
+on a.AlbumId = t.AlbumId
+group by a.AlbumId
+having count(t.TrackId) >10
+Order by NumberOfTracks desc
+;
+
+   
