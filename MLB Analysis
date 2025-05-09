@@ -1,6 +1,6 @@
 #This is my analysis of MLB data dating back to 1871 using data from Sean Lahman configured by jknecht for SQLite:
 
-#Let's start off with how many wins the Phillies had in 2019?
+#Let's start off with what the record was for the Phillies had in 2019?
 select tf.FranchName, t.W, t.L
 from Teams t
 join TeamsFranchises tf on t.franchID=tf.franchID
@@ -8,7 +8,7 @@ where t.yearID=2019
 and tf.FranchName='Philadelphia Phillies'
 ;
 
-#Top 5 Players with the most HomeRuns in the 1977 season
+#Top 5 Players with the most Homeruns in the 1977 season
 select p.nameFirst || ' ' || p.nameLast as Full_Name, t.name, b.HR
 from people p
 join Batting b
