@@ -1,3 +1,142 @@
-#A special thank you to Sean Lahman and jknecht for the database and configuration to perform this analysis.
-#This is my analysis of MLB data dating back to 1871:
+#This is my analysis of MLB data dating back to 1871 using data from Sean Lahman configured by jknecht for SQLite:
 
+#Let's start off with how many wins the Phillies had in 2019?
+select tf.FranchName, t.W, t.L
+from Teams t
+join TeamsFranchises tf on t.franchID=tf.franchID
+where t.yearID=2019
+and tf.FranchName='Philadelphia Phillies'
+;
+
+#Top 5 Players with the most HomeRuns in the 1977 season
+select p.nameFirst || ' ' || p.nameLast as Full_Name, t.name, b.HR
+from people p
+join Batting b
+on p.playerID = b.playerID
+join Teams t
+on b.teamID=t.teamID
+where b.yearID= '1977'
+group by p.playerid
+order by b.HR desc
+limit 5
+;
+
+#Players in the 2017 allstar game and what team they were representing
+select p.nameFirst || ' ' || p.nameLast as Full_Name, min(tf.franchName)
+from AllstarFull asf            
+join People p
+on p.playerID=asf.playerID
+join Teams t
+on t.teamID=asf.teamID
+join TeamsFranchises tf
+on t.franchID=tf.franchID
+where asf.yearID='2017'
+group by p.playerid
+;
+
+#Worst ERA to win a CY Young Award and what year they won
+select p.nameFirst|| ' ' || p.nameLast as Full_Name, ap.yearID
+from People p
+join AwardsPlayers ap
+on p.playerID=ap.playerID
+join Pitching pi
+on p.playerID=pi.playerID
+and pi.yearID = ap.yearID
+where ap.awardID ='Cy Young Award'
+order by pi.ERA desc
+limit 1
+;
+
+#Batting AVG for Top 5 players on each team for the 2019 season
+with RankedBatters as (
+    select p.nameFirst || ' ' || p.nameLast as Full_Name, round(b.h* 1.0/b.AB, 3) as Batting_Avg, tf.franchName as Team_Name, rank() over (partition by b.teamID order by round(b.h* 1.0/b.AB, 3) desc) as Rank
+    from Batting b
+    join people p on b.playerID=p.playerID
+    join Teams t on b.teamID=t.teamID and b.yearID=t.yearID
+    join TeamsFranchises tf on t.franchID=tf.franchID
+    where b.yearID='2019'
+    and b.AB>30
+)
+select Full_Name, Batting_Avg, Team_Name
+from RankedBatters
+where rank <=5
+order by Team_Name, Batting_Avg desc;
+
+#Batting AVG for Top 5 players on each team for the 2020 season
+with RankedBatters as (
+    select p.nameFirst || ' ' || p.nameLast as Full_Name, round(b.h* 1.0/b.AB, 3) as Batting_Avg, tf.franchName as Team_Name, rank() over (partition by b.teamID order by round(b.h* 1.0/b.AB, 3) desc) as Rank
+    from Batting b
+    join people p on b.playerID=p.playerID
+    join Teams t on b.teamID=t.teamID and b.yearID=t.yearID
+    join TeamsFranchises tf on t.franchID=tf.franchID
+    where b.yearID='2020'
+    and b.AB>30
+)
+select Full_Name, Batting_Avg, Team_Name
+from RankedBatters
+where rank <=5
+order by Team_Name, Batting_Avg desc;
+
+#Average batting avg for the 2020 season
+select round(avg(H* 1.0/AB), 3) as Avg_Batting_Avg
+from Batting
+where yearID='2020'
+and AB>0
+;
+
+#Averge batting avg for the 2019 season
+select round(avg(H* 1.0/AB), 3) as Avg_Batting_Avg
+from Batting
+where yearID='2019'
+and AB>0
+;
+
+#Top 5 players by Fielding avg in the 2020 season
+select p.nameFirst || ' ' || p.nameLast as Full_Name, f.A as Fielding_Average, tf.franchName as Team_Name
+from Fielding f
+join People p on f.playerID=p.playerID
+join Teams t on f.teamID=t.teamID and f.yearID=t.yearID
+join TeamsFranchises tf on t.franchID=tf.FranchID
+where f.yearID=2020
+order by f.A desc
+limit 5
+;
+
+#Top 5 heaviest Rookies debuting in 2019
+select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
+from People p
+where p.weight is not null 
+and p.debut between '2019-01-01' and '2019-12-31'
+order by p.weight desc
+limit 5
+;
+
+#Top 5 heaviest Rookies who debuted all time
+select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
+from People p
+join Appearances a on p.playerID=a.playerID
+where p.weight is not null 
+and strftime('%Y',p.debut)=a.yearID
+order by p.weight desc
+limit 5
+;
+
+#Checking on rookie weight for the year 1951
+select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight
+from People p
+where p.weight is not null
+and p.debut like '%1951%'
+order by p.weight desc
+;
+
+#It looks like the data Gaedel is an outlier and he's the lightest ever rookie not the heaviest
+#Showing the data again accounting for this outlier and removing it from the result with the not equal to statement.
+select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
+from People p
+join Appearances a on p.playerID=a.playerID
+where p.weight is not null 
+and strftime('%Y',p.debut)=a.yearID
+and p.nameLast <> 'Gaedel'
+order by p.weight desc
+limit 5
+;
