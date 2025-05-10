@@ -140,3 +140,100 @@ and p.nameLast <> 'Gaedel'
 order by p.weight desc
 limit 5
 ;
+
+#Top 5 Players with the Most Career Stolen Bases
+select p.nameFirst || ' ' || p.nameLast as Full_Name, sum(b.SB) as Career_SB
+from Batting b
+join People p on b.playerID=p.playerID
+group by b.playerID
+order by Career_SB desc
+limit 5
+;
+
+#Top 5 Batting Averages by Position
+with PrimaryPosition as (
+select playerID,POS AS position, SUM(G) AS games_played, ROW_NUMBER() over (partition by playerID order by SUM(G) desc) AS pos_rank
+from Fielding
+group by playerID, POS
+),
+PlayerPrimaryPosition AS (
+select playerID, position
+from PrimaryPosition
+where pos_rank = 1
+),
+CareerBatting AS (
+select playerID, ROUND(SUM(H) * 1.0 / NULLIF(SUM(AB), 0), 3) AS batting_avg, SUM(AB) AS total_at_bats
+from Batting
+group by playerID
+having total_at_bats >= 100
+),
+PlayerStats AS (
+select pp.playerID, pe.nameFirst || ' ' || pe.nameLast as player_name, pp.position, cb.batting_avg
+from PlayerPrimaryPosition pp
+join CareerBatting cb on pp.playerID = cb.playerID
+join People pe on pp.playerID = pe.playerID
+),
+RankedPlayers AS (
+select player_name, position, batting_avg, ROW_NUMBER() over (partition by position order by batting_avg desc) as rank
+from PlayerStats
+)
+select player_name, position, batting_avg
+from RankedPlayers
+where rank <= 5
+order by position, rank
+;
+
+#Most Home Runs in a Season
+select max(b.HR) as Total_HR, p.nameFirst || ' ' || nameLast as Player_Name, tf.FranchName, b.yearID
+from Batting b
+join People p on b.playerID=p.playerID
+join Teams t on b.teamID=t.TeamID
+join TeamsFranchises tf on t.franchID=tf.FranchID
+group by b.playerID, b.yearID
+order by Total_HR desc
+limit 1
+;
+
+#Those results are littered with Steroid scandals, let's sort those known steroid users out to find who hit the most Homeruns in a season without a scandal
+select max(b.HR) as Total_HR, p.nameFirst || ' ' || nameLast as Player_Name, tf.FranchName, b.yearID
+from Batting b
+join People p on b.playerID=p.playerID
+join Teams t on b.teamID=t.TeamID
+join TeamsFranchises tf on t.franchID=tf.FranchID
+where p.nameFirst || ' ' || p.nameLast not in (
+'Barry Bonds', 'Alex Rodriguez', 'Rafael Palmeiro', 'Manny Ramirez', 'Sammy Sosa', 'Ivan Rodriguez', 'Mark McGwire', 'Jose Canseco'
+)
+group by b.playerID, b.yearID
+order by Total_HR desc
+limit 1
+;
+
+#Career Strikeouts Leader - All aboard the Ryan Express
+select sum(pi.SO) as Career_SO, p.nameFirst || ' ' || nameLast as Player_Name
+from Pitching pi
+join People p on pi.playerID=p.playerID
+group by p.playerID
+order by Career_SO desc
+limit 1
+;
+
+#All National League and American League Rookie of the Year Winners and what year they won
+select p.nameFirst || ' ' || p.nameLast as Player_Name, ap.yearID, tf.FranchName
+from AwardsPlayers ap
+join People p on ap.playerID=p.playerID
+join Batting b on ap.playerID=b.playerID and ap.yearID = b.yearID
+join Teams t on b.teamID=t.teamID and b.yearID=t.yearID
+join TeamsFranchises tf on t.FranchID=tf.FranchID
+where ap.awardID = 'Rookie of the Year'
+group by p.playerID
+order by ap.yearID desc
+;
+
+#Players with atleast 3,000 Career Hits, which ofcourse results in the scandalous Hit King
+select p.nameFirst || ' ' || p.nameLast as Player_Name, sum(b.H) as Career_Hits
+from Batting b
+join People p on b.playerID=p.playerID
+group by b.playerID
+having sum(b.H) > 3000
+order by Career_Hits desc
+;
