@@ -1,6 +1,6 @@
 #This is my analysis of MLB data dating back to 1871 using data from Sean Lahman configured by jknecht for SQLite:
 
-#Let's start off with what the record was for the Phillies had in 2019?
+#Let's start off with what the record was for the Phillies in 2019?
 select tf.FranchName, t.W, t.L
 from Teams t
 join TeamsFranchises tf on t.franchID=tf.franchID
