@@ -1,27 +1,25 @@
-#This is my analysis of MLB data dating back to 1871 using data from Sean Lahman configured by jknecht for SQLite:
+#The following is my analysis of MLB Data from 1871 through 2022 using data from Sean Lahman MLB database.
 
-#Let's start off with what the record was for the Phillies in 2019?
-select tf.FranchName, t.W, t.L
+#What was the record of every MLB team in 2019 in W-L format?
+select tf.FranchName, t.W || '-' || t.L as Record
 from Teams t
 join TeamsFranchises tf on t.franchID=tf.franchID
-where t.yearID=2019
-and tf.FranchName='Philadelphia Phillies'
-;
+where t.yearID = 2019
+order by t.W desc;
 
-#Top 5 Players with the most Homeruns in the 1977 season
-select p.nameFirst || ' ' || p.nameLast as Full_Name, t.name, b.HR
-from people p
-join Batting b
-on p.playerID = b.playerID
-join Teams t
-on b.teamID=t.teamID
-where b.yearID= '1977'
-group by p.playerid
-order by b.HR desc
-limit 5
-;
+#Teams with Most Wins but No Playoff Appearance (Post-1969)
+select t.name, t.W ||'-' || t.L as Record, t.yearID
+from Teams t
+where t.yearID>=1969
+and t.teamID not in (
+select teamIDwinner from SeriesPost
+union
+select teamIDloser from SeriesPost
+)
+order by t.W desc
+limit 10;
 
-#Players in the 2017 allstar game and what team they were representing
+#What players were in the 2017 AllStar Game and what team did they represent?
 select p.nameFirst || ' ' || p.nameLast as Full_Name, min(tf.franchName)
 from AllstarFull asf            
 join People p
@@ -31,10 +29,124 @@ on t.teamID=asf.teamID
 join TeamsFranchises tf
 on t.franchID=tf.franchID
 where asf.yearID='2017'
-group by p.playerid
-;
+group by p.playerid;
 
-#Worst ERA to win a CY Young Award and what year they won
+#Highest Batting Avg in a season and how many homeruns they hit, at least 100 at bats
+select p.nameFirst || ' ' || p.nameLast as Player_Name, b.HR, round(b.H*1.0/b.AB, 3) as Batting_Avg, b.yearID as Year
+from Batting b
+join People p on b.playerID=p.playerID
+where Batting_Avg >= .41
+and b.ab>100;
+
+#Who are the players with at least 3,000 career hits?
+select p.nameFirst || ' ' || p.nameLast as Player_Name, sum(b.H) as Career_Hits
+from Batting b
+join People p on b.playerID=p.playerID
+group by b.playerID
+having sum(b.H) > 3000
+order by Career_Hits desc;
+
+#Who are the top 5 heaviest rookies of all time?
+select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
+from People p
+join Appearances a on p.playerID=a.playerID
+where p.weight is not null 
+and strftime('%Y',p.debut)=a.yearID
+order by p.weight desc
+limit 5;
+
+#It looks like the data for Gaedel is an outlier and he's the lightest ever rookie not the heaviest
+#Showing the data again accounting for this outlier and removing it from the result with the not equal to statement
+select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
+from People p
+join Appearances a on p.playerID=a.playerID
+where p.weight is not null 
+and strftime('%Y',p.debut)=a.yearID
+and p.nameLast <> 'Gaedel'
+order by p.weight desc
+limit 5;
+
+#Who are the top 5 players with the most Career stolen bases?
+select p.nameFirst || ' ' || p.nameLast as Full_Name, sum(b.SB) as Career_SB
+from Batting b
+join People p on b.playerID=p.playerID
+group by b.playerID
+order by Career_SB desc
+limit 5;
+
+#Who had the most Homeruns in a season?
+select max(b.HR) as Total_HR, p.nameFirst || ' ' || nameLast as Player_Name, tf.FranchName, b.yearID
+from Batting b
+join People p on b.playerID=p.playerID
+join Teams t on b.teamID=t.TeamID
+join TeamsFranchises tf on t.franchID=tf.FranchID
+group by b.playerID, b.yearID
+order by Total_HR desc
+limit 1;
+
+#Those results are littered with Steroid scandals, let's sort those known steroid users out to find who hit the most Homeruns in a season without help
+select max(b.HR) as Total_HR, p.nameFirst || ' ' || nameLast as Player_Name, tf.FranchName, b.yearID
+from Batting b
+join People p on b.playerID=p.playerID
+join Teams t on b.teamID=t.TeamID
+join TeamsFranchises tf on t.franchID=tf.FranchID
+where p.nameFirst || ' ' || p.nameLast not in (
+'Barry Bonds', 'Alex Rodriguez', 'Rafael Palmeiro', 'Manny Ramirez', 'Sammy Sosa', 'Ivan Rodriguez', 'Mark McGwire', 'Jose Canseco'
+)
+group by b.playerID, b.yearID
+order by Total_HR desc
+limit 1;
+
+#Who pitched the most innings in a season and what year was it?
+select p.nameFirst || ' ' || p.nameLast as Player_Name, max(pi.IPouts/3) as IP, pi.yearID
+from Pitching pi
+join People p on pi.playerID=p.playerID
+order by IP desc;
+
+#Who had the most saves in a season?
+select p.nameFirst || ' ' || p.nameLast as Player_Name, pi.SV as Saves, pi.yearID
+from Pitching pi
+join People p on pi.playerID=p.playerID
+order by pi.SV desc
+limit 1;
+
+#Who has the most career strikeouts?
+select sum(pi.SO) as Career_SO, p.nameFirst || ' ' || nameLast as Player_Name
+from Pitching pi
+join People p on pi.playerID=p.playerID
+group by p.playerID
+order by Career_SO desc
+limit 1;
+
+#Who has the most strikeouts in a Cy Young winning season?
+select p.nameFirst || ' ' || p.nameLast as Player_Name, pi.SO as StrikeOuts, pi.yearID
+from Pitching pi
+join People p on pi.playerID=p.playerID
+join AwardsPlayers ap on pi.playerID=ap.playerID and ap.yearID=pi.yearID
+where ap.awardID='Cy Young Award'
+order by StrikeOuts desc
+limit 10;
+
+#Who has the most Cy Young Awards?
+select p.nameFirst || ' ' || p.nameLast as PlayerName, count(ap.awardID) as AwardCount
+from AwardsPlayers ap
+join People p on ap.playerID=p.playerID
+where ap.awardID='Cy Young Award'
+group by p.playerID
+order by AwardCount desc
+limit 1;
+
+#Who won a Cy Young Award but did not start in the allstar game that year?
+select p.nameFirst || ' ' || p.nameLast as PlayerName, ap.yearID
+from AwardsPlayers ap
+join People p on ap.playerID=p.playerID
+left join AllstarFull asf on ap.playerID=asf.playerID and ap.yearID=asf.yearID and asf.startingPos is not null
+where ap.awardID='Cy Young Award'
+and asf.playerID is null
+order by ap.yearID
+limit 10;
+
+#Who had the worst ERA as a CY Young winner and what year did they win the award?
 select p.nameFirst|| ' ' || p.nameLast as Full_Name, ap.yearID
 from People p
 join AwardsPlayers ap
@@ -44,10 +156,45 @@ on p.playerID=pi.playerID
 and pi.yearID = ap.yearID
 where ap.awardID ='Cy Young Award'
 order by pi.ERA desc
-limit 1
-;
+limit 1;
 
-#Batting AVG for Top 5 players on each team for the 2019 season
+#All National League and American League Rookie of the Year Winners and what year they won
+select p.nameFirst || ' ' || p.nameLast as Player_Name, ap.yearID, tf.FranchName
+from AwardsPlayers ap
+join People p on ap.playerID=p.playerID
+join Batting b on ap.playerID=b.playerID and ap.yearID = b.yearID
+join Teams t on b.teamID=t.teamID and b.yearID=t.yearID
+join TeamsFranchises tf on t.FranchID=tf.FranchID
+where ap.awardID = 'Rookie of the Year'
+group by p.playerID
+order by ap.yearID desc;
+
+#Who has the lowest Batting Average in a season to make the all star game?
+select p.nameFirst || ' ' || p.nameLast as Player_Name, b.yearID as Year, round(sum(b.H)*1.0/sum(b.AB), 3) as Batting_Average, f.POS as Position
+from Batting b
+join AllstarFull asf on b.playerID=asf.playerID and b.yearID=asf.yearID
+join People p on b.playerID=p.playerID
+join Fielding f on b.playerID=f.playerID
+group by p.playerID, b.yearID
+having sum(b.AB)>0
+and f.POS <> 'P'
+order by Batting_Average asc
+limit 1;
+
+#Lou Gehrig, he only played 8 games in 1939 because of ALS
+#Now let's see who when they play more than half a season
+select p.nameFirst || ' ' || p.nameLast as Player_Name, b.yearID as Year, round(sum(b.H)*1.0/sum(b.AB), 3) as Batting_Average, f.POS as Position
+from Batting b
+join AllstarFull asf on b.playerID=asf.playerID and b.yearID=asf.yearID
+join People p on b.playerID=p.playerID
+join Fielding f on b.playerID=f.playerID
+group by p.playerID, b.yearID
+having sum(b.AB)>0
+and f.POS <> 'P'
+and f.GS >=100
+order by Batting_Average asc
+limit 1;
+#Who are the top 5 players per team in 2019 by Batting Avg?
 with RankedBatters as (
     select p.nameFirst || ' ' || p.nameLast as Full_Name, round(b.h* 1.0/b.AB, 3) as Batting_Avg, tf.franchName as Team_Name, rank() over (partition by b.teamID order by round(b.h* 1.0/b.AB, 3) desc) as Rank
     from Batting b
@@ -62,36 +209,7 @@ from RankedBatters
 where rank <=5
 order by Team_Name, Batting_Avg desc;
 
-#Batting AVG for Top 5 players on each team for the 2020 season
-with RankedBatters as (
-    select p.nameFirst || ' ' || p.nameLast as Full_Name, round(b.h* 1.0/b.AB, 3) as Batting_Avg, tf.franchName as Team_Name, rank() over (partition by b.teamID order by round(b.h* 1.0/b.AB, 3) desc) as Rank
-    from Batting b
-    join people p on b.playerID=p.playerID
-    join Teams t on b.teamID=t.teamID and b.yearID=t.yearID
-    join TeamsFranchises tf on t.franchID=tf.franchID
-    where b.yearID='2020'
-    and b.AB>30
-)
-select Full_Name, Batting_Avg, Team_Name
-from RankedBatters
-where rank <=5
-order by Team_Name, Batting_Avg desc;
-
-#Average batting avg for the 2020 season
-select round(avg(H* 1.0/AB), 3) as Avg_Batting_Avg
-from Batting
-where yearID='2020'
-and AB>0
-;
-
-#Averge batting avg for the 2019 season
-select round(avg(H* 1.0/AB), 3) as Avg_Batting_Avg
-from Batting
-where yearID='2019'
-and AB>0
-;
-
-#Top 5 players by Fielding avg in the 2020 season
+#Who are the top 5 players per team in 2020 by Fielding Avg?
 select p.nameFirst || ' ' || p.nameLast as Full_Name, f.A as Fielding_Average, tf.franchName as Team_Name
 from Fielding f
 join People p on f.playerID=p.playerID
@@ -99,58 +217,9 @@ join Teams t on f.teamID=t.teamID and f.yearID=t.yearID
 join TeamsFranchises tf on t.franchID=tf.FranchID
 where f.yearID=2020
 order by f.A desc
-limit 5
-;
+limit 5;
 
-#Top 5 heaviest Rookies debuting in 2019
-select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
-from People p
-where p.weight is not null 
-and p.debut between '2019-01-01' and '2019-12-31'
-order by p.weight desc
-limit 5
-;
-
-#Top 5 heaviest Rookies who debuted all time
-select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
-from People p
-join Appearances a on p.playerID=a.playerID
-where p.weight is not null 
-and strftime('%Y',p.debut)=a.yearID
-order by p.weight desc
-limit 5
-;
-
-#Checking on rookie weight for the year 1951
-select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight
-from People p
-where p.weight is not null
-and p.debut like '%1951%'
-order by p.weight desc
-;
-
-#It looks like the data Gaedel is an outlier and he's the lightest ever rookie not the heaviest
-#Showing the data again accounting for this outlier and removing it from the result with the not equal to statement.
-select p.nameFirst || ' ' || p.nameLast as Full_Name, p.weight as Weight, p.debut as Debut_Date
-from People p
-join Appearances a on p.playerID=a.playerID
-where p.weight is not null 
-and strftime('%Y',p.debut)=a.yearID
-and p.nameLast <> 'Gaedel'
-order by p.weight desc
-limit 5
-;
-
-#Top 5 Players with the Most Career Stolen Bases
-select p.nameFirst || ' ' || p.nameLast as Full_Name, sum(b.SB) as Career_SB
-from Batting b
-join People p on b.playerID=p.playerID
-group by b.playerID
-order by Career_SB desc
-limit 5
-;
-
-#Top 5 Batting Averages by Position
+#Who are the top 5 players per position by Batting Average?
 with PrimaryPosition as (
 select playerID,POS AS position, SUM(G) AS games_played, ROW_NUMBER() over (partition by playerID order by SUM(G) desc) AS pos_rank
 from Fielding
@@ -180,205 +249,4 @@ from PlayerStats
 select player_name, position, batting_avg
 from RankedPlayers
 where rank <= 5
-order by position, rank
-;
-
-#Most Home Runs in a Season
-select max(b.HR) as Total_HR, p.nameFirst || ' ' || nameLast as Player_Name, tf.FranchName, b.yearID
-from Batting b
-join People p on b.playerID=p.playerID
-join Teams t on b.teamID=t.TeamID
-join TeamsFranchises tf on t.franchID=tf.FranchID
-group by b.playerID, b.yearID
-order by Total_HR desc
-limit 1
-;
-
-#Those results are littered with Steroid scandals, let's sort those known steroid users out to find who hit the most Homeruns in a season without help
-select max(b.HR) as Total_HR, p.nameFirst || ' ' || nameLast as Player_Name, tf.FranchName, b.yearID
-from Batting b
-join People p on b.playerID=p.playerID
-join Teams t on b.teamID=t.TeamID
-join TeamsFranchises tf on t.franchID=tf.FranchID
-where p.nameFirst || ' ' || p.nameLast not in (
-'Barry Bonds', 'Alex Rodriguez', 'Rafael Palmeiro', 'Manny Ramirez', 'Sammy Sosa', 'Ivan Rodriguez', 'Mark McGwire', 'Jose Canseco'
-)
-group by b.playerID, b.yearID
-order by Total_HR desc
-limit 1
-;
-
-#Career Strikeouts Leader - All aboard the Ryan Express
-select sum(pi.SO) as Career_SO, p.nameFirst || ' ' || nameLast as Player_Name
-from Pitching pi
-join People p on pi.playerID=p.playerID
-group by p.playerID
-order by Career_SO desc
-limit 1
-;
-
-#All National League and American League Rookie of the Year Winners and what year they won
-select p.nameFirst || ' ' || p.nameLast as Player_Name, ap.yearID, tf.FranchName
-from AwardsPlayers ap
-join People p on ap.playerID=p.playerID
-join Batting b on ap.playerID=b.playerID and ap.yearID = b.yearID
-join Teams t on b.teamID=t.teamID and b.yearID=t.yearID
-join TeamsFranchises tf on t.FranchID=tf.FranchID
-where ap.awardID = 'Rookie of the Year'
-group by p.playerID
-order by ap.yearID desc
-;
-
-#Players with atleast 3,000 Career Hits, which ofcourse results in the Hit King
-select p.nameFirst || ' ' || p.nameLast as Player_Name, sum(b.H) as Career_Hits
-from Batting b
-join People p on b.playerID=p.playerID
-group by b.playerID
-having sum(b.H) > 3000
-order by Career_Hits desc
-;
-
-#What was the record of every MLB team in 2019 in standard record format?
-select tf.FranchName, t.W || '-' || t.L as Record
-from Teams t
-join TeamsFranchises tf on t.franchID=tf.franchID
-where t.yearID = 2019
-order by t.W desc
-;
-
-#Who has the lowest Batting Average in a season to make the all star game?
-select p.nameFirst || ' ' || p.nameLast as Player_Name, b.yearID as Year, round(sum(b.H)*1.0/sum(b.AB), 3) as Batting_Average, f.POS as Position
-from Batting b
-join AllstarFull asf on b.playerID=asf.playerID and b.yearID=asf.yearID
-join People p on b.playerID=p.playerID
-join Fielding f on b.playerID=f.playerID
-group by p.playerID, b.yearID
-having sum(b.AB)>0
-and f.POS <> 'P'
-order by Batting_Average asc
-limit 1;
-
-#Lou Gehrig, he only played 8 games in 1939 because of ALS
-#Now let's see who when they play more than half a season
-select p.nameFirst || ' ' || p.nameLast as Player_Name, b.yearID as Year, round(sum(b.H)*1.0/sum(b.AB), 3) as Batting_Average, f.POS as Position
-from Batting b
-join AllstarFull asf on b.playerID=asf.playerID and b.yearID=asf.yearID
-join People p on b.playerID=p.playerID
-join Fielding f on b.playerID=f.playerID
-group by p.playerID, b.yearID
-having sum(b.AB)>0
-and f.POS <> 'P'
-and f.GS >=100
-order by Batting_Average asc
-limit 1;
-
-
-#Teams with Most Wins but No Playoff Appearance (Post-1969)
-select t.name, t.W ||'-' || t.L as Record, t.yearID
-from Teams t
-where t.yearID>=1969
-and t.teamID not in (
-select teamIDwinner from SeriesPost
-union
-select teamIDloser from SeriesPost
-)
-order by t.W desc
-limit 10
-;
-
-#What were the names of all the ball parks in 2022 (using Home games table)
-select p.parkname as Ball_Park_Name, coalesce(p.parkalias, ' ') as Park_Alias, hg.teamkey
-from Parks p
-join HomeGames hg on p.parkkey=hg.parkkey
-where hg.yearkey=2022
-and hg.games >5
-order by hg.teamkey, p.parkname
-;
-
-#What were the names of all the ball parks in 2021 (using Home games table)
-select p.parkname as Ball_Park_Name, coalesce(p.parkalias, ' ') as Park_Alias
-from Parks p
-join HomeGames hg on p.parkkey=hg.parkkey
-where hg.yearkey=2021
-order by p.parkname
-;
-
-#There were more parks in 2022 than 2021, why was that?
-#CLE played home games in two locations in 2022
-select p.parkname, hg2.teamkey, coalesce(p.parkalias, ' ') as Park_Alias, p1.parkname AS parkname_2022, p2.parkname AS parkname_2021
-from Parks p
-left join HomeGames hg1 on p.parkkey = hg1.parkkey and hg1.yearkey = 2022
-left join HomeGames hg2 on p.parkkey = hg2.parkkey and hg2.yearkey = 2021
-left join Parks p1 on p.parkkey = p1.parkkey and hg1.yearkey = 2022
-left join Parks p2 on p.parkkey = p2.parkkey and hg2.yearkey = 2021
-where hg1.yearkey = 2022 or hg2.yearkey = 2021
-order by p.parkname
-;
-
-#Checking Cleveland's park name
-#Progressive Field, not the one we found earlier.
-#It was because CLE played a homegame in Pennsylvania for the little league world series MLB event.
-select p.parkkey, p.parkname, p.ID
-from Parks p
-where p.city='Cleveland'
-;
-
-#Far simpler way to check for park names
-select t.teamID, t.park
-from Teams t
-where yearID = 2022
-;
-
-#Who pitched the most innings in a year and what year was it
-select p.nameFirst || ' ' || p.nameLast as Player_Name, max(pi.IPouts/3) as IP, pi.yearID
-from Pitching pi
-join People p on pi.playerID=p.playerID
-order by IP desc
-;
-
-#Who had the most saves in a season
-select p.nameFirst || ' ' || p.nameLast as Player_Name, pi.SV as Saves, pi.yearID
-from Pitching pi
-join People p on pi.playerID=p.playerID
-order by pi.SV desc
-limit 1
-;
-
-#Highest Batting Avg in a season and how many homeruns they hit, atleast 100 at bats
-select p.nameFirst || ' ' || p.nameLast as Player_Name, b.HR, round(b.H*1.0/b.AB, 3) as Batting_Avg, b.yearID as Year
-from Batting b
-join People p on b.playerID=p.playerID
-where Batting_Avg >= .41
-and b.ab>100
-;
-
-#Most strikeouts in a cy young season
-select p.nameFirst || ' ' || p.nameLast as Player_Name, pi.SO as StrikeOuts, pi.yearID
-from Pitching pi
-join People p on pi.playerID=p.playerID
-join AwardsPlayers ap on pi.playerID=ap.playerID and ap.yearID=pi.yearID
-where ap.awardID='Cy Young Award'
-order by StrikeOuts desc
-limit 10
-;
-
-#Who has the most Cy Young Awards
-select p.nameFirst || ' ' || p.nameLast as PlayerName, count(ap.awardID) as AwardCount
-from AwardsPlayers ap
-join People p on ap.playerID=p.playerID
-where ap.awardID='Cy Young Award'
-group by p.playerID
-order by AwardCount desc
-limit 1
-;
-
-#Cy young winners who did not start in an allstar game that year
-select p.nameFirst || ' ' || p.nameLast as PlayerName, ap.yearID
-from AwardsPlayers ap
-join People p on ap.playerID=p.playerID
-left join AllstarFull asf on ap.playerID=asf.playerID and ap.yearID=asf.yearID and asf.startingPos is not null
-where ap.awardID='Cy Young Award'
-and asf.playerID is null
-order by ap.yearID
-limit 10
-;
+order by position, rank;
